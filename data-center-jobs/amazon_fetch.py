@@ -144,6 +144,56 @@ def fetch_amazon_dc_jobs(max_results=None):
         
     return pd.DataFrame(processed_jobs)
 
+def upload_to_supabase(df):
+    """
+    Uploads or upserts the parsed job DataFrame to Supabase using its REST API.
+    """
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_KEY")
+    
+    if not supabase_url or not supabase_key:
+        print("Note: SUPABASE_URL or SUPABASE_KEY environment variables not set. Skipping Supabase upload.")
+        return
+        
+    records = []
+    for _, row in df.iterrows():
+        record = {
+            "job_id": str(row["Job_ID"]),
+            "title": row["Title"] if pd.notnull(row["Title"]) else None,
+            "location": row["Location"] if pd.notnull(row["Location"]) else None,
+            "basic_qualifications": row["Basic_Qualifications"] if pd.notnull(row["Basic_Qualifications"]) else None,
+            "description": row["Description"] if pd.notnull(row["Description"]) else None,
+            "min_years_experience": int(row["Min_Years_Experience"]) if pd.notnull(row["Min_Years_Experience"]) else None,
+            "max_years_experience": int(row["Max_Years_Experience"]) if pd.notnull(row["Max_Years_Experience"]) else None,
+            "years_experience_all": row["Years_Experience_All"] if isinstance(row["Years_Experience_All"], list) else None,
+            "min_salary": float(row["Min_Salary"]) if pd.notnull(row["Min_Salary"]) else None,
+            "max_salary": float(row["Max_Salary"]) if pd.notnull(row["Max_Salary"]) else None,
+            "salary_type": row["Salary_Type"] if pd.notnull(row["Salary_Type"]) else None
+        }
+        records.append(record)
+        
+    chunk_size = 100
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates"  # Upsert matching primary key (job_id)
+    }
+    
+    url = f"{supabase_url.rstrip('/')}/rest/v1/amazon_jobs"
+    
+    print(f"\nUploading {len(records)} jobs to Supabase...")
+    for i in range(0, len(records), chunk_size):
+        chunk = records[i:i+chunk_size]
+        try:
+            response = requests.post(url, json=chunk, headers=headers)
+            response.raise_for_status()
+            print(f"Successfully uploaded chunk {i//chunk_size + 1} ({len(chunk)} jobs)...")
+        except Exception as e:
+            print(f"Error uploading chunk {i//chunk_size + 1} to Supabase: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print("Response detail:", e.response.text)
+
 if __name__ == "__main__":
     # Fetching a larger batch to demonstrate extraction (e.g., 500 jobs)
     # Set max_results to None to fetch all available jobs.
@@ -154,15 +204,10 @@ if __name__ == "__main__":
     df.to_csv(output_path, index=False)
     print(f"\nPipeline finished. Saved {len(df)} jobs to {output_path}")
     
+    # Upload data to Supabase
+    upload_to_supabase(df)
+    
     # Display some stats and preview
     print("\nDataFrame Shape:", df.shape)
     print("\nJobs with parsed Experience requirements:", df["Min_Years_Experience"].notnull().sum())
     print("Jobs with parsed Salary Range information:", df["Min_Salary"].notnull().sum())
-    
-    print("\nPreview of extracted experience requirements:")
-    print(df[df["Min_Years_Experience"].notnull()][["Title", "Min_Years_Experience", "Max_Years_Experience", "Years_Experience_All"]].head())
-    
-    sal_jobs = df[df["Min_Salary"].notnull()]
-    if not sal_jobs.empty:
-        print("\nPreview of extracted salary info:")
-        print(sal_jobs[["Title", "Location", "Min_Salary", "Max_Salary", "Salary_Type"]])
