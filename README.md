@@ -1,13 +1,17 @@
-# ManyDataCenter - Jobs Pipeline
+# ManyDataCenter - Data Center Intelligence & Jobs Platform
 
-An automated data pipeline that fetches "Data Center" jobs from the Amazon Jobs API, extracts structured fields using regular expressions, and upserts them to a Supabase database.
+ManyDataCenter is a platform designed to aggregate, analyze, and track information about global data centers (including locations, facilities, capacity, and specifications). 
 
-## Architecture
+The automated job listing ingestion pipeline is the initial starting point of this broader intelligence project.
 
-- **Extraction**: Paginated extraction from Amazon's internal JSON endpoint in batches of 100.
-- **Regex Parsing**: Extracts required years of experience and salary range details.
-- **Storage**: Updates a local CSV (`data-center-jobs/amazon_jobs.csv`) and upserts to a Supabase database (`amazon_jobs`).
-- **Automation**: Executed daily via GitHub Actions.
+---
+
+## Current Architecture: Job Listings Ingestion
+
+- **Extraction**: Paginated extraction of job listings matching "Data Center" from Amazon's internal JSON API.
+- **Regex Parsing**: Extracts required years of experience and salary details from description and qualification texts.
+- **Storage**: Updates a local CSV (`data-center-jobs/amazon_jobs.csv`) and upserts database records to Supabase (`amazon_jobs`).
+- **Automation**: Runs daily via GitHub Actions.
 
 ## Extracted Fields
 
