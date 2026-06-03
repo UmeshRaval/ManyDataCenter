@@ -1,6 +1,6 @@
 # ManyDataCenter - Data Center Intelligence & Jobs Platform
 
-ManyDataCenter is a platform designed to aggregate, analyze, and track information about global data centers (including locations, facilities, capacity, and specifications). 
+ManyDataCenter is a project designed to aggregate, analyze, and track information about global data centers (including locations, facilities, capacity, and specifications). 
 
 The automated job listing ingestion pipeline is the initial starting point of this broader intelligence project.
 
