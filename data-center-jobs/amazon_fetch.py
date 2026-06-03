@@ -130,6 +130,7 @@ def fetch_amazon_dc_jobs(max_results=None):
         
         processed_jobs.append({
             "Job_ID": job.get("id_icims"),
+            "Operator_ID": "aws",  # Linked to 'aws' in data_center_operators
             "Title": job.get("title"),
             "Location": job.get("location"),
             "Basic_Qualifications": basic_qual,
@@ -159,6 +160,7 @@ def upload_to_supabase(df):
     for _, row in df.iterrows():
         record = {
             "job_id": str(row["Job_ID"]),
+            "operator_id": str(row["Operator_ID"]),
             "title": row["Title"] if pd.notnull(row["Title"]) else None,
             "location": row["Location"] if pd.notnull(row["Location"]) else None,
             "basic_qualifications": row["Basic_Qualifications"] if pd.notnull(row["Basic_Qualifications"]) else None,
@@ -180,7 +182,7 @@ def upload_to_supabase(df):
         "Prefer": "resolution=merge-duplicates"  # Upsert matching primary key (job_id)
     }
     
-    url = f"{supabase_url.rstrip('/')}/rest/v1/amazon_jobs"
+    url = f"{supabase_url.rstrip('/')}/rest/v1/data_center_jobs"
     
     print(f"\nUploading {len(records)} jobs to Supabase...")
     for i in range(0, len(records), chunk_size):
@@ -200,7 +202,7 @@ if __name__ == "__main__":
     df = fetch_amazon_dc_jobs(max_results=500)
     
     # Save the pipeline results to CSV
-    output_path = os.path.join(os.path.dirname(__file__), "amazon_jobs.csv")
+    output_path = os.path.join(os.path.dirname(__file__), "data_center_jobs.csv")
     df.to_csv(output_path, index=False)
     print(f"\nPipeline finished. Saved {len(df)} jobs to {output_path}")
     

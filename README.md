@@ -4,7 +4,7 @@ ManyDataCenter is a project designed to aggregate, analyze, and track informatio
 
 The platform currently includes:
 1. **Data Center Operators**: Seed data for major hyperscalers, wholesale providers, and colocation operators.
-2. **Job Listings Ingestion**: Automated daily pipeline tracking data-center-specific job openings.
+2. **Data Center Jobs**: Automated pipeline compiling data-center-specific job openings across all tracked operators.
 
 ---
 
@@ -41,19 +41,20 @@ using (true);
 
 ---
 
-## 2. Job Listings Ingestion
+## 2. Unified Data Center Jobs
 
-The script `data-center-jobs/amazon_fetch.py` fetches job listings matching "Data Center".
+The script `data-center-jobs/amazon_fetch.py` fetches job listings and maps them to a unified database table. Currently, it targets Amazon Jobs and maps them with `operator_id = 'aws'`. Other operator scrapers can be added to insert into this same table.
 
-- **Local Storage**: Saved as a CSV at `data-center-jobs/amazon_jobs.csv`.
-- **Database Storage**: Upserts to the Supabase `amazon_jobs` table.
+- **Local Storage**: Saved as a CSV at `data-center-jobs/data_center_jobs.csv`.
+- **Database Storage**: Upserts to the Supabase `data_center_jobs` table.
 - **Automation**: Runs daily via GitHub Actions.
 
 ### Supabase Table Schema
 ```sql
-create table if not exists public.amazon_jobs (
+create table if not exists public.data_center_jobs (
     job_id text primary key,
-    title text,
+    operator_id text references public.data_center_operators(id) on delete cascade,
+    title text not null,
     location text,
     basic_qualifications text,
     description text,
@@ -67,11 +68,11 @@ create table if not exists public.amazon_jobs (
 );
 
 -- Enable Row Level Security (RLS)
-alter table public.amazon_jobs enable row level security;
+alter table public.data_center_jobs enable row level security;
 
 -- Allow public read access
 create policy "Allow public read access to jobs"
-on public.amazon_jobs
+on public.data_center_jobs
 for select
 to public
 using (true);
