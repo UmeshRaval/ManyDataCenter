@@ -281,35 +281,35 @@ def upload_to_supabase(records):
 def main():
     all_jobs = []
     
-    # 1. Fetch AWS jobs (default to 500 to match previous fetch volume)
+    # 1. Fetch AWS jobs (No limit to fetch all available listings)
     try:
-        aws_jobs = fetch_aws_jobs(limit=500)
+        aws_jobs = fetch_aws_jobs(limit=None)
         all_jobs.extend(aws_jobs)
     except Exception as e:
         print(f"Failed fetching AWS jobs: {e}")
         
-    # Workday configurations for operators
+    # Workday configurations for operators (No limit to fetch all listings)
     workday_configs = [
         {
             "operator_id": "equinix",
             "base_url": "https://equinix.wd1.myworkdayjobs.com",
             "tenant": "equinix",
             "site_id": "External",
-            "limit": 50
+            "limit": None
         },
         {
             "operator_id": "cyrusone",
             "base_url": "https://cyrusone.wd1.myworkdayjobs.com",
             "tenant": "cyrusone",
             "site_id": "CyrusOneCareerPortal",
-            "limit": 50
+            "limit": None
         },
         {
             "operator_id": "qts",
             "base_url": "https://qtsdatacenters.wd5.myworkdayjobs.com",
             "tenant": "qtsdatacenters",
             "site_id": "QTS",
-            "limit": 50
+            "limit": None
         }
     ]
     
@@ -334,6 +334,10 @@ def main():
     # Convert to DataFrame
     df = pd.DataFrame(all_jobs)
     
+    # Deduplicate locally by job_id (keeping the first occurrence)
+    if not df.empty:
+        df.drop_duplicates(subset=["job_id"], keep="first", inplace=True)
+        
     # Save combined results locally
     output_path = os.path.join(os.path.dirname(__file__), "data_center_jobs.csv")
     df.to_csv(output_path, index=False)
