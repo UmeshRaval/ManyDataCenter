@@ -41,9 +41,7 @@ using (true);
 
 ---
 
-## 2. Unified Data Center Jobs
-
-The script `data-center-jobs/amazon_fetch.py` fetches job listings and maps them to a unified database table. Currently, it targets Amazon Jobs and maps them with `operator_id = 'aws'`. Other operator scrapers can be added to insert into this same table.
+The script `data-center-jobs/fetch_all_jobs.py` fetches job listings and maps them to a unified database table. Currently, it aggregates listings from Amazon (AWS), Microsoft Azure, Equinix, CyrusOne, QTS, Iron Mountain, Digital Realty, EdgeConneX, Compass Datacenters, and Sabey Data Centers. Other operator scrapers can easily be added to target the same table.
 
 - **Local Storage**: Saved as a CSV at `data-center-jobs/data_center_jobs.csv`.
 - **Database Storage**: Upserts to the Supabase `data_center_jobs` table.

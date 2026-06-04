@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import time
 import re
+from bs4 import BeautifulSoup
 
 # Regex patterns for parsing qualifications and descriptions
 YOEX_PATTERN = re.compile(r'(?i)\b(\d+)(?:\s*(?:-|to)\s*(\d+))?\+?\s*years?\b')
@@ -226,6 +227,376 @@ def fetch_workday_jobs(operator_id, base_url, tenant, site_id, limit=50):
     return processed
 
 # ----------------------------------------
+# 2.1 Microsoft Azure Scraper
+# ----------------------------------------
+def fetch_azure_jobs(limit=None):
+    print("\n--- Fetching AZURE Jobs via Microsoft Careers API ---")
+    search_url = "https://apply.careers.microsoft.com/api/pcsx/search"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    jobs_list = []
+    start = 0
+    page_size = 10
+    
+    while True:
+        params = {
+            "domain": "microsoft.com",
+            "query": "Data Center",
+            "location": "",
+            "start": start
+        }
+        try:
+            r = requests.get(search_url, params=params, headers=headers)
+            r.raise_for_status()
+            data = r.json().get('data', {})
+        except Exception as e:
+            print(f"Error fetching Azure search at start {start}: {e}")
+            break
+            
+        positions = data.get('positions', [])
+        if not positions:
+            break
+            
+        jobs_list.extend(positions)
+        total = data.get('count', 0)
+        print(f"AZURE: Found {len(jobs_list)} / {total} listings...")
+        
+        if limit and len(jobs_list) >= limit:
+            jobs_list = jobs_list[:limit]
+            break
+            
+        if len(positions) < page_size or start + len(positions) >= total:
+            break
+            
+        start += len(positions)
+        time.sleep(0.5)
+        
+    processed = []
+    for idx, pos in enumerate(jobs_list):
+        pos_id = pos.get('id')
+        title = pos.get('name')
+        locations_list = pos.get('standardizedLocations', []) or pos.get('locations', []) or []
+        location = ", ".join(locations_list) if locations_list else None
+        
+        print(f"  [{idx+1}/{len(jobs_list)}] Fetching Azure details for: {title}...")
+        desc = ""
+        try:
+            detail_url = "https://apply.careers.microsoft.com/api/pcsx/position_details"
+            detail_params = {
+                "position_id": pos_id,
+                "domain": "microsoft.com",
+                "hl": "en"
+            }
+            r_det = requests.get(detail_url, params=detail_params, headers=headers)
+            if r_det.status_code == 200:
+                job_info = r_det.json().get('data', {})
+                desc = job_info.get('jobDescription', "")
+        except Exception as e:
+            print(f"    Error fetching details: {e}")
+            
+        clean_text = re.sub(r'<[^>]*>', ' ', desc)
+        min_years, max_years, years_list = extract_years_of_experience(clean_text)
+        min_salary, max_salary, salary_type = extract_salary_range(clean_text)
+        
+        processed.append({
+            "job_id": f"azure-{pos_id}",
+            "operator_id": "azure",
+            "title": title,
+            "location": location,
+            "basic_qualifications": None,
+            "description": desc,
+            "min_years_experience": min_years,
+            "max_years_experience": max_years,
+            "years_experience_all": years_list,
+            "min_salary": min_salary,
+            "max_salary": max_salary,
+            "salary_type": salary_type
+        })
+        time.sleep(0.5)
+        
+    return processed
+
+# ----------------------------------------
+# 2.2 Digital Realty Scraper
+# ----------------------------------------
+def fetch_digital_realty_jobs(limit=None):
+    print("\n--- Fetching DIGITAL REALTY Jobs via Oracle HCM API ---")
+    url = "https://hdep.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    params = {
+        'onlyData': 'true',
+        'expand': 'requisitionList.workLocation,requisitionList.otherWorkLocations,requisitionList.secondaryLocations,flexFieldsFacet.values,requisitionList.requisitionFlexFields',
+        'finder': 'findReqs;siteNumber=CX,facetsList=LOCATIONS;WORK_LOCATIONS;WORKPLACE_TYPES;TITLES;CATEGORIES;ORGANIZATIONS;POSTING_DATES;FLEX_FIELDS,limit=100,keyword="Data Center",sortBy=RELEVANCY'
+    }
+    
+    try:
+        r = requests.get(url, params=params, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+        items = data.get('items', [])
+        requisitions = items[0].get('requisitionList', []) if items else []
+    except Exception as e:
+        print(f"Error fetching Digital Realty search: {e}")
+        return []
+        
+    if limit:
+        requisitions = requisitions[:limit]
+        
+    print(f"DIGITAL REALTY: Found {len(requisitions)} listings...")
+    processed = []
+    
+    for idx, req in enumerate(requisitions):
+        req_id = req.get('Id')
+        title = req.get('Title')
+        location = req.get('PrimaryLocation')
+        
+        print(f"  [{idx+1}/{len(requisitions)}] Fetching Digital Realty details for: {title}...")
+        desc = ""
+        try:
+            preview_url = f"https://hdep.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/requisitions/preview/{req_id}"
+            r_prev = requests.get(preview_url, headers=headers)
+            if r_prev.status_code == 200:
+                soup = BeautifulSoup(r_prev.text, 'html.parser')
+                meta = soup.find('meta', property='og:description')
+                if meta:
+                    desc = meta.get('content', '')
+        except Exception as e:
+            print(f"    Error fetching preview details: {e}")
+            
+        clean_text = re.sub(r'<[^>]*>', ' ', desc)
+        min_years, max_years, years_list = extract_years_of_experience(clean_text)
+        min_salary, max_salary, salary_type = extract_salary_range(clean_text)
+        
+        processed.append({
+            "job_id": f"digital-realty-{req_id}",
+            "operator_id": "digital-realty",
+            "title": title,
+            "location": location,
+            "basic_qualifications": None,
+            "description": desc,
+            "min_years_experience": min_years,
+            "max_years_experience": max_years,
+            "years_experience_all": years_list,
+            "min_salary": min_salary,
+            "max_salary": max_salary,
+            "salary_type": salary_type
+        })
+        time.sleep(0.5)
+        
+    return processed
+
+# ----------------------------------------
+# 2.3 EdgeConneX Scraper
+# ----------------------------------------
+def fetch_edgeconnex_jobs(limit=None):
+    print("\n--- Fetching EDGECONNEX Jobs via Greenhouse API ---")
+    url = "https://boards-api.greenhouse.io/v1/boards/edgeconnex/jobs"
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+    params = {
+        "content": "true"
+    }
+    
+    try:
+        r = requests.get(url, params=params, headers=headers)
+        r.raise_for_status()
+        jobs = r.json().get('jobs', [])
+    except Exception as e:
+        print(f"Error fetching EdgeConneX jobs: {e}")
+        return []
+        
+    dc_jobs = []
+    for job in jobs:
+        title = job.get('title', '')
+        if 'data center' in title.lower() or 'datacenter' in title.lower() or 'critical' in title.lower() or 'facility' in title.lower():
+            dc_jobs.append(job)
+            
+    if limit:
+        dc_jobs = dc_jobs[:limit]
+        
+    print(f"EDGECONNEX: Found {len(dc_jobs)} matching listings...")
+    processed = []
+    
+    for job in dc_jobs:
+        job_id = job.get('id')
+        title = job.get('title')
+        location = job.get('location', {}).get('name')
+        desc = job.get('content', '')
+        
+        clean_text = re.sub(r'<[^>]*>', ' ', desc)
+        min_years, max_years, years_list = extract_years_of_experience(clean_text)
+        min_salary, max_salary, salary_type = extract_salary_range(clean_text)
+        
+        processed.append({
+            "job_id": f"edgeconnex-{job_id}",
+            "operator_id": "edgeconnex",
+            "title": title,
+            "location": location,
+            "basic_qualifications": None,
+            "description": desc,
+            "min_years_experience": min_years,
+            "max_years_experience": max_years,
+            "years_experience_all": years_list,
+            "min_salary": min_salary,
+            "max_salary": max_salary,
+            "salary_type": salary_type
+        })
+        
+    return processed
+
+# ----------------------------------------
+# 2.4 Compass Datacenters Scraper
+# ----------------------------------------
+def fetch_compass_jobs(limit=None):
+    print("\n--- Fetching COMPASS Jobs via Breezy HR API ---")
+    url = "https://compass-datacenters.breezy.hr/json"
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+    
+    try:
+        r = requests.get(url, headers=headers)
+        r.raise_for_status()
+        jobs = r.json()
+    except Exception as e:
+        print(f"Error fetching Compass jobs: {e}")
+        return []
+        
+    dc_jobs = []
+    for job in jobs:
+        title = job.get('name', '')
+        if 'data center' in title.lower() or 'datacenter' in title.lower() or 'operations' in title.lower() or 'facility' in title.lower() or 'engineer' in title.lower():
+            dc_jobs.append(job)
+            
+    if limit:
+        dc_jobs = dc_jobs[:limit]
+        
+    print(f"COMPASS: Found {len(dc_jobs)} matching listings...")
+    processed = []
+    
+    for idx, job in enumerate(dc_jobs):
+        job_id = job.get('id')
+        title = job.get('name')
+        job_url = job.get('url')
+        loc_info = job.get('location', {})
+        location = f"{loc_info.get('city', '')}, {loc_info.get('state', {}).get('name', '')}, {loc_info.get('country', {}).get('name', '')}".strip(", ")
+        
+        print(f"  [{idx+1}/{len(dc_jobs)}] Fetching Compass details for: {title}...")
+        desc = ""
+        try:
+            r_det = requests.get(job_url, headers=headers)
+            if r_det.status_code == 200:
+                soup = BeautifulSoup(r_det.text, 'html.parser')
+                div = soup.find('div', class_='description') or soup.find('div', itemprop='description')
+                if div:
+                    desc = str(div)
+        except Exception as e:
+            print(f"    Error fetching details: {e}")
+            
+        clean_text = re.sub(r'<[^>]*>', ' ', desc)
+        min_years, max_years, years_list = extract_years_of_experience(clean_text)
+        min_salary, max_salary, salary_type = extract_salary_range(clean_text)
+        
+        processed.append({
+            "job_id": f"compass-{job_id}",
+            "operator_id": "compass",
+            "title": title,
+            "location": location,
+            "basic_qualifications": None,
+            "description": desc,
+            "min_years_experience": min_years,
+            "max_years_experience": max_years,
+            "years_experience_all": years_list,
+            "min_salary": min_salary,
+            "max_salary": max_salary,
+            "salary_type": salary_type
+        })
+        time.sleep(0.5)
+        
+    return processed
+
+# ----------------------------------------
+# 2.5 Sabey Data Centers Scraper
+# ----------------------------------------
+def fetch_sabey_jobs(limit=None):
+    print("\n--- Fetching SABEY Jobs by HTML Scraping ---")
+    url = "https://sabeydatacenters.com/about/careers"
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+    
+    try:
+        r = requests.get(url, headers=headers)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, 'html.parser')
+    except Exception as e:
+        print(f"Error fetching Sabey careers: {e}")
+        return []
+        
+    job_rows = []
+    for row in soup.find_all('div', class_='flex flex-wrap'):
+        h1 = row.find('h1')
+        a = row.find('a', href=lambda h: h and 'icims.com' in h)
+        if h1 and a:
+            title = h1.text.strip()
+            link = a['href']
+            
+            loc_p = row.find('p', class_='text-gray-600')
+            location = loc_p.text.strip() if loc_p else None
+            
+            desc_div = row.find('div', class_='rich-text')
+            description = desc_div.text.strip() if desc_div else ""
+            
+            job_rows.append({
+                "title": title,
+                "location": location,
+                "url": link,
+                "description": description
+            })
+            
+    if limit:
+        job_rows = job_rows[:limit]
+        
+    print(f"SABEY: Found {len(job_rows)} listings...")
+    processed = []
+    
+    for job in job_rows:
+        title = job["title"]
+        location = job["location"]
+        link = job["url"]
+        desc = job["description"]
+        
+        match = re.search(r'/jobs/(\d+)/', link)
+        job_id = match.group(1) if match else str(hash(link))
+        
+        clean_text = re.sub(r'<[^>]*>', ' ', desc)
+        min_years, max_years, years_list = extract_years_of_experience(clean_text)
+        min_salary, max_salary, salary_type = extract_salary_range(clean_text)
+        
+        processed.append({
+            "job_id": f"sabey-{job_id}",
+            "operator_id": "sabey",
+            "title": title,
+            "location": location,
+            "basic_qualifications": None,
+            "description": desc,
+            "min_years_experience": min_years,
+            "max_years_experience": max_years,
+            "years_experience_all": years_list,
+            "min_salary": min_salary,
+            "max_salary": max_salary,
+            "salary_type": salary_type
+        })
+        
+    return processed
+
+# ----------------------------------------
 # 3. Supabase Upload
 # ----------------------------------------
 def upload_to_supabase(records):
@@ -310,6 +681,13 @@ def main():
             "tenant": "qtsdatacenters",
             "site_id": "QTS",
             "limit": None
+        },
+        {
+            "operator_id": "iron-mountain",
+            "base_url": "https://ironmountain.wd5.myworkdayjobs.com",
+            "tenant": "ironmountain",
+            "site_id": "iron-mountain-jobs",
+            "limit": None
         }
     ]
     
@@ -326,6 +704,21 @@ def main():
             all_jobs.extend(wd_jobs)
         except Exception as e:
             print(f"Failed fetching jobs for {cfg['operator_id']}: {e}")
+            
+    # 3. Fetch from additional operators
+    additional_scrapers = [
+        ("azure", fetch_azure_jobs),
+        ("digital-realty", fetch_digital_realty_jobs),
+        ("edgeconnex", fetch_edgeconnex_jobs),
+        ("compass", fetch_compass_jobs),
+        ("sabey", fetch_sabey_jobs)
+    ]
+    for name, scraper_func in additional_scrapers:
+        try:
+            new_jobs = scraper_func(limit=None)
+            all_jobs.extend(new_jobs)
+        except Exception as e:
+            print(f"Failed fetching jobs for {name}: {e}")
             
     if not all_jobs:
         print("No jobs fetched.")
@@ -344,7 +737,7 @@ def main():
     print(f"\nPipeline finished. Saved {len(df)} total jobs locally to {output_path}")
     
     # Upload to Supabase
-    upload_to_supabase(all_jobs)
+    upload_to_supabase(df.to_dict(orient="records"))
     
     # Print summary statistics
     print("\nDataFrame Shape:", df.shape)
