@@ -31,7 +31,7 @@ jobs:
       env:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-      run: python data-center-jobs/amazon_fetch.py
+      run: python data-center-jobs/fetch_all_jobs.py
       
     - name: Commit and Push Changes
       run: |
