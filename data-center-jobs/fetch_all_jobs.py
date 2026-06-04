@@ -281,9 +281,9 @@ def upload_to_supabase(records):
 def main():
     all_jobs = []
     
-    # 1. Fetch AWS jobs (Limit to 100 for safety, adjust as needed)
+    # 1. Fetch AWS jobs (default to 500 to match previous fetch volume)
     try:
-        aws_jobs = fetch_aws_jobs(limit=100)
+        aws_jobs = fetch_aws_jobs(limit=500)
         all_jobs.extend(aws_jobs)
     except Exception as e:
         print(f"Failed fetching AWS jobs: {e}")
