@@ -13,65 +13,46 @@ The platform currently includes:
 The script `data-center-jobs/add_operators.py` compiles and updates a list of major industry players.
 
 - **Local Storage**: Saved as a CSV at `data-center-jobs/operators.csv`.
-- **Database Storage**: Upserts to the Supabase `data_center_operators` table.
+- **Database Storage**: Upserts to the Supabase database.
 
-### Supabase Table Schema
-```sql
-create table if not exists public.data_center_operators (
-    id text primary key,
-    name text not null,
-    code text unique not null,
-    website text,
-    headquarters text,
-    operator_type text,
-    description text,
-    created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
+## 2. Data Center Jobs
 
--- Enable Row Level Security (RLS)
-alter table public.data_center_operators enable row level security;
+The script `data-center-jobs/fetch_all_jobs.py` fetches job listings and maps them to a unified database table. Currently, it aggregates listings from Amazon (AWS), Microsoft Azure, Equinix, CyrusOne, QTS, Iron Mountain, Digital Realty, EdgeConneX, Compass Datacenters, and Sabey Data Centers. 
 
--- Allow public read access
-create policy "Allow public read access to operators"
-on public.data_center_operators
-for select
-to public
-using (true);
-```
+The pipeline features:
+- **Title Filtering**: Accurately extracts actual data center/critical environment roles rather than generic cloud engineering jobs.
+- **NLP Extraction**: Automatically parses years of experience required and salary bands directly from raw job descriptions.
+- **Local Storage**: Saved as a CSV at `data-center-jobs/data_center_jobs.csv`.
+- **Database Storage**: Upserts to the Supabase database.
+- **Automation**: Designed to run cleanly as an automated daily workflow.
 
 ---
 
-The script `data-center-jobs/fetch_all_jobs.py` fetches job listings and maps them to a unified database table. Currently, it aggregates listings from Amazon (AWS), Microsoft Azure, Equinix, CyrusOne, QTS, Iron Mountain, Digital Realty, EdgeConneX, Compass Datacenters, and Sabey Data Centers. Other operator scrapers can easily be added to target the same table.
+## Local Setup & Execution
 
-- **Local Storage**: Saved as a CSV at `data-center-jobs/data_center_jobs.csv`.
-- **Database Storage**: Upserts to the Supabase `data_center_jobs` table.
-- **Automation**: Runs daily via GitHub Actions.
+If you want to run the pipelines locally, navigate to the `data-center-jobs` directory and ensure you have installed the requirements (e.g., `requests`, `pandas`, `beautifulsoup4`).
 
-### Supabase Table Schema
-```sql
-create table if not exists public.data_center_jobs (
-    job_id text primary key,
-    operator_id text references public.data_center_operators(id) on delete cascade,
-    title text not null,
-    location text,
-    basic_qualifications text,
-    description text,
-    min_years_experience integer,
-    max_years_experience integer,
-    years_experience_all integer[],
-    min_salary numeric,
-    max_salary numeric,
-    salary_type text,
-    fetched_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
+### Environment Variables
+To enable automatic database syncing, set the following environment variables in your terminal:
+- `SUPABASE_URL`: Your Supabase project URL.
+- `SUPABASE_KEY`: Your Supabase API key (Service Role key recommended for bulk upserts).
 
--- Enable Row Level Security (RLS)
-alter table public.data_center_jobs enable row level security;
+*Note: If these environment variables are omitted, the scripts will simply skip the upload phase and save the results cleanly to local CSV files.*
 
--- Allow public read access
-create policy "Allow public read access to jobs"
-on public.data_center_jobs
-for select
-to public
-using (true);
+### Running the Scripts
+
+**1. Seed Operators:**
+```bash
+python data-center-jobs/add_operators.py
+```
+
+**2. Fetch All Jobs:**
+```bash
+python data-center-jobs/fetch_all_jobs.py
+```
+
+**3. Manual Supabase Sync (Optional):**
+If you already have a generated `data_center_jobs.csv` and just want to push it to the database without re-scraping:
+```bash
+python data-center-jobs/upload_to_supabase.py
 ```
