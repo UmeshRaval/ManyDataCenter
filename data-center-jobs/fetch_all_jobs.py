@@ -77,7 +77,7 @@ def fetch_aws_jobs(limit=100):
             "sort": "recent"
         }
         try:
-            r = requests.get(url, params=params, headers=headers)
+            r = requests.get(url, params=params, headers=headers, timeout=10)
             r.raise_for_status()
             data = r.json()
         except Exception as e:
@@ -102,6 +102,11 @@ def fetch_aws_jobs(limit=100):
         
     processed = []
     for job in jobs_list:
+        title = job.get("title", "")
+        title_lower = title.lower() if title else ""
+        if 'data center' not in title_lower and 'datacenter' not in title_lower and 'critical' not in title_lower:
+            continue
+            
         basic_qual = job.get("basic_qualifications", "") or ""
         desc = job.get("description", "") or ""
         
@@ -111,7 +116,7 @@ def fetch_aws_jobs(limit=100):
         processed.append({
             "job_id": f"aws-{job.get('id_icims')}",
             "operator_id": "aws",
-            "title": job.get("title"),
+            "title": title,
             "location": job.get("location"),
             "basic_qualifications": basic_qual,
             "description": desc,
@@ -152,7 +157,7 @@ def fetch_workday_jobs(operator_id, base_url, tenant, site_id, limit=50):
             "searchText": "Data Center"
         }
         try:
-            r = requests.post(search_url, json=payload, headers=headers)
+            r = requests.post(search_url, json=payload, headers=headers, timeout=10)
             r.raise_for_status()
             data = r.json()
         except Exception as e:
@@ -183,7 +188,11 @@ def fetch_workday_jobs(operator_id, base_url, tenant, site_id, limit=50):
             continue
             
         detail_url = f"{base_url}/wday/cxs/{tenant}/{site_id}{path}"
-        title = job.get("title")
+        title = job.get("title", "")
+        title_lower = title.lower() if title else ""
+        if 'data center' not in title_lower and 'datacenter' not in title_lower and 'critical' not in title_lower:
+            continue
+            
         location = job.get("locationsText")
         
         print(f"  [{idx+1}/{len(jobs_summary)}] Fetching details: {title} ({location})...")
@@ -191,7 +200,7 @@ def fetch_workday_jobs(operator_id, base_url, tenant, site_id, limit=50):
         job_req_id = job.get("bulletFields", [None])[0] if job.get("bulletFields") else None
         
         try:
-            detail_r = requests.get(detail_url, headers={"User-Agent": "Mozilla/5.0"})
+            detail_r = requests.get(detail_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
             if detail_r.status_code == 200:
                 info = detail_r.json().get("jobPostingInfo", {})
                 desc = info.get("jobDescription", "")
@@ -237,7 +246,7 @@ def fetch_azure_jobs(limit=None):
     }
     
     jobs_list = []
-    start = 0
+    page = 1
     page_size = 10
     
     while True:
@@ -245,10 +254,10 @@ def fetch_azure_jobs(limit=None):
             "domain": "microsoft.com",
             "query": "Data Center",
             "location": "",
-            "start": start
+            "page": page
         }
         try:
-            r = requests.get(search_url, params=params, headers=headers)
+            r = requests.get(search_url, params=params, headers=headers, timeout=10)
             r.raise_for_status()
             data = r.json().get('data', {})
         except Exception as e:
@@ -267,10 +276,10 @@ def fetch_azure_jobs(limit=None):
             jobs_list = jobs_list[:limit]
             break
             
-        if len(positions) < page_size or start + len(positions) >= total:
+        if len(positions) < page_size or page * page_size >= total:
             break
             
-        start += len(positions)
+        page += 1
         time.sleep(0.5)
         
     processed = []
@@ -289,7 +298,7 @@ def fetch_azure_jobs(limit=None):
                 "domain": "microsoft.com",
                 "hl": "en"
             }
-            r_det = requests.get(detail_url, params=detail_params, headers=headers)
+            r_det = requests.get(detail_url, params=detail_params, headers=headers, timeout=10)
             if r_det.status_code == 200:
                 job_info = r_det.json().get('data', {})
                 desc = job_info.get('jobDescription', "")
@@ -335,7 +344,7 @@ def fetch_digital_realty_jobs(limit=None):
     }
     
     try:
-        r = requests.get(url, params=params, headers=headers)
+        r = requests.get(url, params=params, headers=headers, timeout=10)
         r.raise_for_status()
         data = r.json()
         items = data.get('items', [])
@@ -359,7 +368,7 @@ def fetch_digital_realty_jobs(limit=None):
         desc = ""
         try:
             preview_url = f"https://hdep.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/requisitions/preview/{req_id}"
-            r_prev = requests.get(preview_url, headers=headers)
+            r_prev = requests.get(preview_url, headers=headers, timeout=10)
             if r_prev.status_code == 200:
                 soup = BeautifulSoup(r_prev.text, 'html.parser')
                 meta = soup.find('meta', property='og:description')
@@ -404,7 +413,7 @@ def fetch_edgeconnex_jobs(limit=None):
     }
     
     try:
-        r = requests.get(url, params=params, headers=headers)
+        r = requests.get(url, params=params, headers=headers, timeout=10)
         r.raise_for_status()
         jobs = r.json().get('jobs', [])
     except Exception as e:
@@ -461,7 +470,7 @@ def fetch_compass_jobs(limit=None):
     }
     
     try:
-        r = requests.get(url, headers=headers)
+        r = requests.get(url, headers=headers, timeout=10)
         r.raise_for_status()
         jobs = r.json()
     except Exception as e:
@@ -490,7 +499,7 @@ def fetch_compass_jobs(limit=None):
         print(f"  [{idx+1}/{len(dc_jobs)}] Fetching Compass details for: {title}...")
         desc = ""
         try:
-            r_det = requests.get(job_url, headers=headers)
+            r_det = requests.get(job_url, headers=headers, timeout=10)
             if r_det.status_code == 200:
                 soup = BeautifulSoup(r_det.text, 'html.parser')
                 div = soup.find('div', class_='description') or soup.find('div', itemprop='description')
@@ -532,7 +541,7 @@ def fetch_sabey_jobs(limit=None):
     }
     
     try:
-        r = requests.get(url, headers=headers)
+        r = requests.get(url, headers=headers, timeout=10)
         r.raise_for_status()
         soup = BeautifulSoup(r.text, 'html.parser')
     except Exception as e:
@@ -638,7 +647,7 @@ def upload_to_supabase(records):
                 "salary_type": r["salary_type"] if pd.notnull(r["salary_type"]) else None
             })
         try:
-            response = requests.post(url, json=cleaned_chunk, headers=headers)
+            response = requests.post(url, json=cleaned_chunk, headers=headers, timeout=10)
             response.raise_for_status()
             print(f"Successfully uploaded chunk {i//chunk_size + 1} ({len(cleaned_chunk)} jobs)...")
         except Exception as e:
