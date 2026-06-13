@@ -33,6 +33,12 @@ jobs:
         SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       run: python data-center-jobs/fetch_all_jobs.py
       
+    - name: Run H-1B Wages Updater
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: python data-center-jobs/update_h1b_wages.py
+      
     - name: Commit and Push Changes
       run: |
         git config --global user.name "github-actions[bot]"
