@@ -50,12 +50,13 @@ python data-center-jobs/add_operators.py
 ```bash
 python data-center-jobs/fetch_all_jobs.py
 ```
-### Live Dashboard
 
-Check out my Google Data Studio dashboard to visualize the data in realtime. [Data Center Jobs](https://datastudio.google.com/reporting/1b2a6348-1bb7-41a7-ba46-7422342fcf31)
 
 **3. Manual Supabase Sync (Optional):**
 If you already have a generated `data_center_jobs.csv` and just want to push it to the database without re-scraping:
 ```bash
 python data-center-jobs/upload_to_supabase.py
 ```
+### Live Dashboard
+
+Check out my Google Data Studio dashboard to visualize the data in realtime. [Data Center Jobs](https://datastudio.google.com/reporting/1b2a6348-1bb7-41a7-ba46-7422342fcf31)
